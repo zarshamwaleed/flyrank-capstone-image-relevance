@@ -32,28 +32,39 @@ async def create_blog_post(
         updated = embedding_service.embed_blog_post(db_post.id, db)
         if updated:
             db.refresh(db_post)
-            print(f'Embedding generated for blog post {db_post.id}')
+            print(f'✅ Embedding generated for blog post {db_post.id}')
     except Exception as e:
-        print(f'Warning: Failed to generate embedding: {e}')
+        print(f'⚠️ Warning: Failed to generate embedding: {e}')
     
-    # AUTO-SAVE SUGGESTIONS TO REVIEWS
+    # AUTO-SAVE SUGGESTIONS WITH AUTO-REJECT FOR LOW SCORES
     try:
         matches, total = matching_service.find_matches(db_post.id, db, 5, 0)
         if matches:
-            print(f'Auto-saving {len(matches)} suggestions for post {db_post.id}')
+            print(f'🔄 Auto-saving {len(matches)} suggestions for post {db_post.id}')
             for i, match in enumerate(matches, 1):
+                similarity = match['similarity_score']
+                
+                # AUTO-REJECT if similarity is below 25%
+                if similarity < 0.25:
+                    guard_passed = 'rejected'
+                    guard_reason = f'Auto-rejected: Similarity {similarity:.1%} below 25% threshold'
+                else:
+                    guard_passed = 'pending'
+                    guard_reason = None
+                
                 suggestion = Suggestion(
                     post_id=db_post.id,
                     image_id=match['image_id'],
-                    similarity_score=match['similarity_score'],
-                    guard_passed='pending',
+                    similarity_score=similarity,
+                    guard_passed=guard_passed,
+                    guard_reason=guard_reason,
                     rank=i
                 )
                 db.add(suggestion)
             db.commit()
-            print(f'Auto-saved {len(matches)} suggestions for post {db_post.id} to Reviews')
+            print(f'✅ Auto-saved {len(matches)} suggestions for post {db_post.id} to Reviews')
     except Exception as e:
-        print(f'Warning: Failed to auto-save suggestions: {e}')
+        print(f'⚠️ Warning: Failed to auto-save suggestions: {e}')
     
     return db_post
 
@@ -111,9 +122,9 @@ async def update_blog_post(
         updated = embedding_service.embed_blog_post(post_id, db)
         if updated:
             db.refresh(post)
-            print(f'Embedding regenerated for blog post {post_id}')
+            print(f'✅ Embedding regenerated for blog post {post_id}')
     except Exception as e:
-        print(f'Warning: Failed to regenerate embedding: {e}')
+        print(f'⚠️ Warning: Failed to regenerate embedding: {e}')
     
     return post
 

@@ -11,7 +11,7 @@ class MismatchGuard:
     # Mismatch Guard - Safety layer for AI recommendations
     
     def __init__(self):
-        self.default_min_similarity = 0.3
+        self.default_min_similarity = 0.25
         self.default_min_confidence = 0.7
         self.default_require_subject_match = False  # Disabled by default for better results
     
