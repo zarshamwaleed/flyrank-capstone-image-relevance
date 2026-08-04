@@ -1,0 +1,550 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Images - AI Image Matching{% endblock %}
+
+{% block content %}
+<!-- ============================================================
+     PAGE HEADER
+     ============================================================ -->
+<div class="top-bar">
+    <div class="page-title">
+        <h1>📸 <span class="highlight">Images</span></h1>
+        <p>Manage your image library and AI processing status</p>
+    </div>
+    <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#uploadModal" style="border-radius: 14px; padding: 12px 28px; font-weight: 600; box-shadow: 0 4px 16px rgba(99,102,241,0.25);">
+        <i class="bi bi-cloud-upload"></i> Upload Image
+    </button>
+</div>
+
+<!-- ============================================================
+     STATS ROW
+     ============================================================ -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-top">
+                <div>
+                    <div class="stat-number" id="total-images" style="font-size: 34px;">0</div>
+                    <div class="stat-label">Total Images</div>
+                </div>
+                <i class="bi bi-image stat-icon" style="color: #6366f1;"></i>
+            </div>
+            <div class="stat-trend neutral" style="margin-top: 12px;">
+                <i class="bi bi-database"></i> In library
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-top">
+                <div>
+                    <div class="stat-number" id="completed-images" style="font-size: 34px; color: #059669;">0</div>
+                    <div class="stat-label">Completed</div>
+                </div>
+                <i class="bi bi-check-circle-fill stat-icon" style="color: #059669;"></i>
+            </div>
+            <div class="stat-trend up" style="margin-top: 12px;">
+                <i class="bi bi-check-all"></i> Processed
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-top">
+                <div>
+                    <div class="stat-number" id="pending-images" style="font-size: 34px; color: #d97706;">0</div>
+                    <div class="stat-label">Processing</div>
+                </div>
+                <i class="bi bi-hourglass-split stat-icon" style="color: #d97706;"></i>
+            </div>
+            <div class="stat-trend neutral" style="margin-top: 12px;">
+                <i class="bi bi-clock"></i> In progress
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-top">
+                <div>
+                    <div class="stat-number" id="failed-images" style="font-size: 34px; color: #dc2626;">0</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+                <i class="bi bi-exclamation-triangle-fill stat-icon" style="color: #dc2626;"></i>
+            </div>
+            <div class="stat-trend down" style="margin-top: 12px;">
+                <i class="bi bi-bug"></i> Errors
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     UPLOAD MODAL
+     ============================================================ -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 24px; border: none; box-shadow: 0 30px 80px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(0,0,0,0.04); padding: 24px 28px;">
+                <h5 class="modal-title" id="uploadModalLabel" style="font-weight: 700; font-size: 20px;">
+                    <i class="bi bi-cloud-upload" style="color: #6366f1; margin-right: 10px;"></i>
+                    Upload New Image
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: 28px;">
+                <form id="uploadForm">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" style="color: #0f172a; font-size: 14px;">Select Image</label>
+                        <div class="drop-zone" id="dropZone" style="border: 2px dashed #e2e8f0; border-radius: 16px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: #f8fafc;">
+                            <i class="bi bi-cloud-arrow-up" style="font-size: 3rem; color: #94a3b8; display: block; margin-bottom: 12px;"></i>
+                            <p style="color: #64748b; margin: 0; font-size: 14px;">
+                                <strong style="color: #6366f1;">Click to browse</strong> or drag & drop
+                            </p>
+                            <p style="color: #94a3b8; font-size: 12px; margin: 4px 0 0;">Supported: JPG, PNG, GIF, WEBP</p>
+                            <input type="file" class="form-control" id="imageFile" accept="image/*" required style="display: none;">
+                        </div>
+                        <div id="filePreview" style="display: none; margin-top: 12px; padding: 12px; background: #f1f5f9; border-radius: 12px; display: flex; align-items: center; gap: 12px;">
+                            <i class="bi bi-file-image" style="font-size: 24px; color: #6366f1;"></i>
+                            <span id="fileName" style="font-weight: 500; color: #0f172a; flex: 1;"></span>
+                            <span id="fileSize" style="color: #94a3b8; font-size: 13px;"></span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFileSelection()" style="border-radius: 8px;">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="uploadStatus" style="display:none;" class="alert alert-info" role="alert">
+                        <i class="bi bi-hourglass-split me-2"></i> Uploading...
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid rgba(0,0,0,0.04); padding: 20px 28px;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 12px; padding: 10px 24px; font-weight: 500;">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitUpload()" style="border-radius: 12px; padding: 10px 28px; font-weight: 600; box-shadow: 0 4px 16px rgba(99,102,241,0.2);">
+                    <i class="bi bi-cloud-upload"></i> Upload Image
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     IMAGES GRID
+     ============================================================ -->
+<div id="images-container">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status" style="width: 48px; height: 48px;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mt-3" style="font-size: 14px;">Loading your images...</p>
+    </div>
+</div>
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+<script>
+// ============================================================
+// LOAD IMAGES
+// ============================================================
+async function loadImages() {
+    try {
+        const response = await fetch('/api/images/');
+        if (!response.ok) throw new Error('Failed to fetch images');
+        const images = await response.json();
+        const container = document.getElementById('images-container');
+        
+        // Update stats
+        const total = images ? images.length : 0;
+        const completed = images ? images.filter(img => img.processing_status === 'completed').length : 0;
+        const pending = images ? images.filter(img => img.processing_status === 'pending' || img.processing_status === 'processing').length : 0;
+        const failed = images ? images.filter(img => img.processing_status === 'failed').length : 0;
+        
+        animateNumber('total-images', total);
+        animateNumber('completed-images', completed);
+        animateNumber('pending-images', pending);
+        animateNumber('failed-images', failed);
+        
+        if (!images || images.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-images" style="font-size: 4rem; color: #e2e8f0;"></i>
+                    <h5 style="color: #64748b; margin-top: 16px; font-weight: 600;">No images uploaded yet</h5>
+                    <p style="color: #94a3b8; font-size: 14px;">Upload your first image to get started with AI matching</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal" style="border-radius: 12px; margin-top: 8px;">
+                        <i class="bi bi-cloud-upload"></i> Upload Image
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="row g-4">';
+        images.forEach((img, index) => {
+            const delay = index * 50;
+            let statusColor = 'warning';
+            let statusIcon = 'bi-hourglass-split';
+            let statusLabel = 'Processing';
+            
+            if (img.processing_status === 'completed') {
+                statusColor = 'success';
+                statusIcon = 'bi-check-circle-fill';
+                statusLabel = 'Completed';
+            } else if (img.processing_status === 'failed') {
+                statusColor = 'danger';
+                statusIcon = 'bi-x-circle-fill';
+                statusLabel = 'Failed';
+            } else if (img.processing_status === 'pending') {
+                statusColor = 'info';
+                statusIcon = 'bi-clock';
+                statusLabel = 'Pending';
+            }
+            
+            // Get image URL
+            const filename = img.file_path ? img.file_path.split('/').pop() : '';
+            const imageUrl = filename ? '/uploads/' + filename : '';
+            
+            html += `
+                <div class="col-md-3 col-sm-6">
+                    <div class="card image-card h-100" style="border-radius: 16px; overflow: hidden; border: 1px solid rgba(0,0,0,0.04); transition: all 0.3s ease; animation: fadeInUp 0.4s ease ${delay}ms both;">
+                        <div class="image-preview" style="height: 160px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+                            ${imageUrl ? `<img src="${imageUrl}" alt="${img.filename}" style="width: 100%; height: 100%; object-fit: cover;">` : `<i class="bi bi-image" style="font-size: 3rem; color: #cbd5e1;"></i>`}
+                            <span class="badge" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 500; backdrop-filter: blur(4px);">
+                                ${(img.file_size/1024).toFixed(1)} KB
+                            </span>
+                        </div>
+                        <div class="card-body" style="padding: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                <h6 class="card-title" style="font-weight: 600; font-size: 14px; color: #0f172a; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;" title="${img.filename}">
+                                    ${img.filename}
+                                </h6>
+                                <span class="badge bg-${statusColor}" style="padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                    <i class="bi ${statusIcon}"></i>
+                                    ${statusLabel}
+                                </span>
+                            </div>
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px;">
+                                <span style="font-size: 10px; color: #94a3b8; background: #f1f5f9; padding: 2px 10px; border-radius: 12px;">
+                                    <i class="bi bi-hash"></i> ${img.id}
+                                </span>
+                                ${img.has_metadata ? `<span style="font-size: 10px; color: #7c3aed; background: #ede9fe; padding: 2px 10px; border-radius: 12px;">
+                                    <i class="bi bi-tags"></i> Metadata
+                                </span>` : ''}
+                                ${img.has_embedding ? `<span style="font-size: 10px; color: #059669; background: #d1fae5; padding: 2px 10px; border-radius: 12px;">
+                                    <i class="bi bi-vector-pen"></i> Embedding
+                                </span>` : ''}
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent" style="border-top: 1px solid rgba(0,0,0,0.04); padding: 12px 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                            ${imageUrl ? `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); viewImage('${imageUrl}', '${img.filename}')" style="border-radius: 8px; font-weight: 500;">
+                                <i class="bi bi-eye"></i>
+                            </button>` : ''}
+                            <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); deleteImage(${img.id})" style="border-radius: 8px; font-weight: 500;">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+        
+    } catch (e) {
+        console.error('Error loading images:', e);
+        document.getElementById('images-container').innerHTML = `
+            <div class="alert alert-danger" role="alert" style="border-radius: 16px; border: none; padding: 20px;">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Error loading images: ${e.message}
+            </div>
+        `;
+    }
+}
+
+// ============================================================
+// VIEW IMAGE
+// ============================================================
+function viewImage(imageUrl, filename) {
+    // Create a modal to preview the image
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'imagePreviewModal';
+    modal.tabIndex = '-1';
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 24px; border: none; box-shadow: 0 30px 80px rgba(0,0,0,0.2);">
+                <div class="modal-header" style="border-bottom: 1px solid rgba(0,0,0,0.04); padding: 20px 24px;">
+                    <h5 class="modal-title" style="font-weight: 600; font-size: 16px;">
+                        <i class="bi bi-image" style="color: #6366f1; margin-right: 8px;"></i>
+                        ${filename}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="padding: 0; text-align: center; background: #f8fafc;">
+                    <img src="${imageUrl}" alt="${filename}" style="max-width: 100%; max-height: 70vh; display: block; margin: 0 auto; padding: 20px;">
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid rgba(0,0,0,0.04); padding: 16px 24px;">
+                    <button class="btn btn-primary" onclick="downloadImage('${imageUrl}', '${filename}')" style="border-radius: 12px;">
+                        <i class="bi bi-download"></i> Download
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 12px;">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    const modalInstance = new bootstrap.Modal(modal);
+    modalInstance.show();
+    
+    modal.addEventListener('hidden.bs.modal', () => {
+        modal.remove();
+    });
+}
+
+// ============================================================
+// DOWNLOAD IMAGE
+// ============================================================
+function downloadImage(imageUrl, filename) {
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// ============================================================
+// SUBMIT UPLOAD
+// ============================================================
+async function submitUpload() {
+    const fileInput = document.getElementById('imageFile');
+    if (!fileInput.files[0]) {
+        alert('Please select an image');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    
+    const status = document.getElementById('uploadStatus');
+    status.style.display = 'block';
+    status.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> Uploading and processing...';
+    
+    const btn = document.querySelector('#uploadModal .btn-primary');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Uploading...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/images/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        status.style.display = 'none';
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        
+        if (response.ok) {
+            // Show success toast
+            showToast('Image uploaded successfully!', 'success');
+            document.getElementById('uploadModal').querySelector('.btn-close').click();
+            document.getElementById('imageFile').value = '';
+            document.getElementById('filePreview').style.display = 'none';
+            loadImages();
+        } else {
+            showToast('Upload failed: ' + JSON.stringify(data), 'danger');
+        }
+    } catch (e) {
+        status.style.display = 'none';
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        showToast('Upload failed: ' + e.message, 'danger');
+    }
+}
+
+// ============================================================
+// DELETE IMAGE
+// ============================================================
+async function deleteImage(id) {
+    if (!confirm('Are you sure you want to delete this image?')) return;
+    try {
+        const response = await fetch('/api/images/' + id, { method: 'DELETE' });
+        if (response.ok) {
+            showToast('Image deleted successfully!', 'success');
+            loadImages();
+        } else {
+            showToast('Delete failed', 'danger');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'danger');
+    }
+}
+
+// ============================================================
+// FILE INPUT HANDLING
+// ============================================================
+document.getElementById('dropZone').addEventListener('click', function() {
+    document.getElementById('imageFile').click();
+});
+
+document.getElementById('imageFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
+        document.getElementById('filePreview').style.display = 'flex';
+    }
+});
+
+function clearFileSelection() {
+    document.getElementById('imageFile').value = '';
+    document.getElementById('filePreview').style.display = 'none';
+}
+
+// Drag and drop support
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    this.style.borderColor = '#6366f1';
+    this.style.background = '#eef2ff';
+});
+
+dropZone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    this.style.borderColor = '#e2e8f0';
+    this.style.background = '#f8fafc';
+});
+
+dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.style.borderColor = '#e2e8f0';
+    this.style.background = '#f8fafc';
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        const fileInput = document.getElementById('imageFile');
+        fileInput.files = files;
+        const event = new Event('change');
+        fileInput.dispatchEvent(event);
+    }
+});
+
+// ============================================================
+// TOAST NOTIFICATION
+// ============================================================
+function showToast(message, type = 'success') {
+    const colors = {
+        success: 'linear-gradient(135deg, #ecfdf5, #d1fae5)',
+        danger: 'linear-gradient(135deg, #fef2f2, #fecaca)',
+        info: 'linear-gradient(135deg, #eff6ff, #dbeafe)'
+    };
+    
+    const borderColors = {
+        success: '#a7f3d0',
+        danger: '#fca5a5',
+        info: '#bfdbfe'
+    };
+    
+    const iconColors = {
+        success: '#059669',
+        danger: '#dc2626',
+        info: '#0284c7'
+    };
+    
+    const icons = {
+        success: 'bi-check-circle-fill',
+        danger: 'bi-exclamation-triangle-fill',
+        info: 'bi-info-circle-fill'
+    };
+    
+    const alert = document.createElement('div');
+    alert.className = 'alert';
+    alert.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 9999; 
+        border-radius: 16px; padding: 16px 24px; 
+        box-shadow: 0 12px 48px rgba(0,0,0,0.1); 
+        animation: slideIn 0.4s ease;
+        background: ${colors[type]};
+        border: 1px solid ${borderColors[type]};
+        max-width: 400px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    `;
+    alert.innerHTML = `
+        <i class="bi ${icons[type]}" style="font-size: 24px; color: ${iconColors[type]};"></i>
+        <span style="font-size: 14px; font-weight: 500; color: #0f172a;">${message}</span>
+    `;
+    document.body.appendChild(alert);
+    setTimeout(() => { 
+        alert.style.opacity = '0'; 
+        alert.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => alert.remove(), 300); 
+    }, 3000);
+}
+
+// ============================================================
+// ANIMATE NUMBER
+// ============================================================
+function animateNumber(elementId, targetValue) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    
+    const duration = 800;
+    const startTime = performance.now();
+    const startValue = 0;
+    
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const currentValue = Math.round(eased * targetValue);
+        
+        el.textContent = currentValue;
+        
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        } else {
+            el.textContent = targetValue;
+        }
+    }
+    
+    requestAnimationFrame(update);
+}
+
+// ============================================================
+// ANIMATIONS
+// ============================================================
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateX(40px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    .image-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 16px 48px rgba(0,0,0,0.06);
+        border-color: rgba(99,102,241,0.08);
+    }
+    .image-card .image-preview {
+        transition: transform 0.3s ease;
+    }
+    .image-card:hover .image-preview {
+        transform: scale(1.02);
+    }
+`;
+document.head.appendChild(style);
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', loadImages);
+</script>
+{% endblock %}

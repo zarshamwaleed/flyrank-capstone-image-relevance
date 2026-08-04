@@ -1,0 +1,133 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Evaluation - AI Image Matching{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📊 Evaluation</h2>
+    <button class="btn btn-primary" onclick="runEvaluation()">
+        <i class="bi bi-play-circle"></i> Run Evaluation
+    </button>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="eval-samples">-</div>
+                    <div class="stat-label">Total Samples</div>
+                </div>
+                <i class="bi bi-file-text stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="eval-correct" style="color: #28a745;">-</div>
+                    <div class="stat-label">Correct Predictions</div>
+                </div>
+                <i class="bi bi-check-circle-fill stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="eval-precision" style="color: #17a2b8;">-</div>
+                    <div class="stat-label">Top-1 Precision</div>
+                </div>
+                <i class="bi bi-graph-up stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="eval-mrr" style="color: #ffc107;">-</div>
+                    <div class="stat-label">Mean Reciprocal Rank</div>
+                </div>
+                <i class="bi bi-bar-chart stat-icon"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="evaluation-container">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadEvaluation() {
+    try {
+        // Load precision metrics
+        const precisionResponse = await fetch('/api/evaluation/precision');
+        if (!precisionResponse.ok) throw new Error('Failed to fetch precision');
+        const data = await precisionResponse.json();
+        
+        document.getElementById('eval-samples').textContent = data.total_samples || 0;
+        document.getElementById('eval-correct').textContent = data.correct_predictions || 0;
+        document.getElementById('eval-precision').textContent = data.top1_precision ? (data.top1_precision * 100).toFixed(1) + '%' : '-';
+        document.getElementById('eval-mrr').textContent = data.mean_reciprocal_rank ? data.mean_reciprocal_rank.toFixed(3) : '-';
+        
+        // Load detailed results
+        const reportResponse = await fetch('/api/evaluation/report');
+        const report = await reportResponse.json();
+        const container = document.getElementById('evaluation-container');
+        
+        if (report.details && report.details.length > 0) {
+            let html = '<div class="card"><div class="card-header">📋 Detailed Results</div><div class="card-body">';
+            html += '<div class="table-responsive"><table class="table table-hover"><thead><tr>';
+            html += '<th>Post</th><th>Correct Image</th><th>Rank</th><th>Status</th>';
+            html += '</tr></thead><tbody>';
+            
+            report.details.forEach(item => {
+                let status = item.found ? '✅ Found' : '❌ Not Found';
+                let statusColor = item.found ? 'success' : 'danger';
+                html += '<tr>';
+                html += '<td>' + item.post_title + '</td>';
+                html += '<td>' + (item.correct_image_filename || 'N/A') + '</td>';
+                html += '<td>' + (item.rank > 0 ? item.rank : '-') + '</td>';
+                html += '<td><span class="badge bg-' + statusColor + '">' + status + '</span></td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            html += '</div></div>';
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<div class="alert alert-info">No evaluation data available. Click "Run Evaluation" to generate results.</div>';
+        }
+        
+    } catch (e) {
+        console.error('Error loading evaluation:', e);
+        document.getElementById('evaluation-container').innerHTML = '<div class="alert alert-danger">Error loading evaluation data: ' + e.message + '</div>';
+    }
+}
+
+async function runEvaluation() {
+    if (!confirm('Run evaluation on all posts?')) return;
+    try {
+        const response = await fetch('/api/evaluation/run?top_k=5', { method: 'POST' });
+        const data = await response.json();
+        if (response.ok) {
+            alert('✅ Evaluation completed!\nTop-1 Precision: ' + (data.top1_precision * 100).toFixed(1) + '%');
+            loadEvaluation();
+        } else {
+            alert('❌ Evaluation failed: ' + JSON.stringify(data));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadEvaluation);
+</script>
+{% endblock %}

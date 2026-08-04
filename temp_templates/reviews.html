@@ -1,0 +1,168 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Reviews - AI Image Matching{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>✅ Reviews</h2>
+    <div>
+        <button class="btn btn-outline-primary me-2" onclick="loadReviews('pending')">Pending</button>
+        <button class="btn btn-outline-success me-2" onclick="loadReviews('approved')">Approved</button>
+        <button class="btn btn-outline-danger" onclick="loadReviews('rejected')">Rejected</button>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="rev-total">-</div>
+                    <div class="stat-label">Total</div>
+                </div>
+                <i class="bi bi-list-check stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="rev-pending" style="color: #ffc107;">-</div>
+                    <div class="stat-label">Pending</div>
+                </div>
+                <i class="bi bi-clock-history stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="rev-approved" style="color: #28a745;">-</div>
+                    <div class="stat-label">Approved</div>
+                </div>
+                <i class="bi bi-check-circle-fill stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="rev-rejected" style="color: #dc3545;">-</div>
+                    <div class="stat-label">Rejected</div>
+                </div>
+                <i class="bi bi-x-circle-fill stat-icon"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="reviews-container">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentFilter = 'pending';
+
+async function loadReviews(status) {
+    if (status) currentFilter = status;
+    
+    try {
+        // Load stats
+        const statsResponse = await fetch('/api/review/stats');
+        const stats = await statsResponse.json();
+        document.getElementById('rev-total').textContent = stats.total_suggestions || 0;
+        document.getElementById('rev-pending').textContent = stats.pending || 0;
+        document.getElementById('rev-approved').textContent = stats.approved || 0;
+        document.getElementById('rev-rejected').textContent = stats.rejected || 0;
+        
+        // Load suggestions
+        let url = '/api/review/suggestions';
+        if (currentFilter === 'pending') {
+            url = '/api/review/suggestions/pending';
+        } else if (currentFilter === 'approved' || currentFilter === 'rejected') {
+            url = '/api/review/suggestions?status=' + currentFilter;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        const container = document.getElementById('reviews-container');
+        const suggestions = data.suggestions || [];
+        
+        if (!suggestions || suggestions.length === 0) {
+            container.innerHTML = '<div class="text-center py-5"><i class="bi bi-inbox" style="font-size: 4rem; color: #ddd;"></i><p class="text-muted mt-3">No suggestions found</p></div>';
+            return;
+        }
+        
+        let html = '<div class="table-responsive"><table class="table table-hover"><thead><tr>';
+        html += '<th>ID</th><th>Post</th><th>Image</th><th>Similarity</th><th>Guard Status</th><th>Review</th><th>Actions</th>';
+        html += '</tr></thead><tbody>';
+        
+        suggestions.forEach(s => {
+            let statusColor = 'warning';
+            if (s.guard_passed === 'passed') statusColor = 'success';
+            else if (s.guard_passed === 'rejected') statusColor = 'danger';
+            
+            html += '<tr>';
+            html += '<td>' + s.id + '</td>';
+            html += '<td>' + (s.post_title || 'N/A') + '</td>';
+            html += '<td>' + (s.image_filename || 'N/A') + '</td>';
+            html += '<td>' + (s.similarity_score ? (s.similarity_score * 100).toFixed(1) + '%' : '-') + '</td>';
+            html += '<td><span class="badge bg-' + statusColor + '">' + (s.guard_passed || 'pending') + '</span></td>';
+            html += '<td>' + (s.review ? s.review.decision : '<span class="badge bg-secondary">pending</span>') + '</td>';
+            html += '<td>';
+            if (!s.review) {
+                html += '<button class="btn btn-sm btn-success me-1" onclick="approve(' + s.id + ')"><i class="bi bi-check"></i></button>';
+                html += '<button class="btn btn-sm btn-danger" onclick="reject(' + s.id + ')"><i class="bi bi-x"></i></button>';
+            }
+            html += '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+        
+    } catch (e) {
+        console.error('Error loading reviews:', e);
+        document.getElementById('reviews-container').innerHTML = '<div class="alert alert-danger">Error loading reviews: ' + e.message + '</div>';
+    }
+}
+
+async function approve(id) {
+    try {
+        const response = await fetch('/api/review/suggestions/' + id + '/approve?reviewer=admin', { method: 'POST' });
+        if (response.ok) {
+            alert('✅ Suggestion approved!');
+            loadReviews(currentFilter);
+        } else {
+            alert('❌ Failed to approve');
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function reject(id) {
+    try {
+        const response = await fetch('/api/review/suggestions/' + id + '/reject?reviewer=admin', { method: 'POST' });
+        if (response.ok) {
+            alert('✅ Suggestion rejected!');
+            loadReviews(currentFilter);
+        } else {
+            alert('❌ Failed to reject');
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadReviews('pending');
+});
+</script>
+{% endblock %}

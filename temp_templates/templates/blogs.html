@@ -1,0 +1,145 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Blog Posts - AI Image Matching{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📝 Blog Posts</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#postModal">
+        <i class="bi bi-plus-circle"></i> New Post
+    </button>
+</div>
+
+<!-- New Post Modal -->
+<div class="modal fade" id="postModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New Blog Post</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="postForm">
+                    <div class="mb-3">
+                        <label class="form-label">Title</label>
+                        <input type="text" class="form-control" id="postTitle" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Content</label>
+                        <textarea class="form-control" id="postContent" rows="4" required></textarea>
+                    </div>
+                    <div id="postStatus" style="display:none;" class="alert alert-info">Creating post...</div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitPost()">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="posts-container">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadPosts() {
+    try {
+        const response = await fetch('/api/posts/');
+        if (!response.ok) throw new Error('Failed to fetch posts');
+        const posts = await response.json();
+        const container = document.getElementById('posts-container');
+        
+        if (!posts || posts.length === 0) {
+            container.innerHTML = '<div class="text-center py-5"><i class="bi bi-file-text" style="font-size: 4rem; color: #ddd;"></i><p class="text-muted mt-3">No blog posts yet</p></div>';
+            return;
+        }
+        
+        let html = '<div class="row">';
+        posts.forEach(post => {
+            html += '<div class="col-md-6 mb-4">';
+            html += '<div class="card">';
+            html += '<div class="card-body">';
+            html += '<h5 class="card-title">' + post.title + '</h5>';
+            html += '<p class="card-text text-muted">' + (post.content || '').substring(0, 150) + '...</p>';
+            html += '<p class="small text-muted">ID: ' + post.id + ' | Created: ' + (post.created_at || '').substring(0, 10) + '</p>';
+            if (post.embedding_model) {
+                html += '<span class="badge bg-info">embedding: ' + post.embedding_model + '</span>';
+            }
+            html += '</div>';
+            html += '<div class="card-footer bg-transparent">';
+            html += '<button class="btn btn-sm btn-outline-danger" onclick="deletePost(' + post.id + ')"><i class="bi bi-trash"></i></button>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+        
+    } catch (e) {
+        console.error('Error loading posts:', e);
+        document.getElementById('posts-container').innerHTML = '<div class="alert alert-danger">Error loading posts: ' + e.message + '</div>';
+    }
+}
+
+async function submitPost() {
+    const title = document.getElementById('postTitle').value.trim();
+    const content = document.getElementById('postContent').value.trim();
+    
+    if (!title || !content) {
+        alert('Please fill in both title and content');
+        return;
+    }
+    
+    const status = document.getElementById('postStatus');
+    status.style.display = 'block';
+    status.textContent = 'Creating post...';
+    
+    try {
+        const response = await fetch('/api/posts/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, content })
+        });
+        
+        const data = await response.json();
+        status.style.display = 'none';
+        
+        if (response.ok) {
+            alert('Post created successfully!');
+            document.getElementById('postModal').querySelector('.btn-close').click();
+            document.getElementById('postTitle').value = '';
+            document.getElementById('postContent').value = '';
+            loadPosts();
+        } else {
+            alert('Failed to create post: ' + JSON.stringify(data));
+        }
+    } catch (e) {
+        status.style.display = 'none';
+        alert('Error: ' + e.message);
+    }
+}
+
+async function deletePost(id) {
+    if (!confirm('Delete this post?')) return;
+    try {
+        const response = await fetch('/api/posts/' + id, { method: 'DELETE' });
+        if (response.ok) {
+            alert('Post deleted!');
+            loadPosts();
+        } else {
+            alert('Delete failed');
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadPosts);
+</script>
+{% endblock %}

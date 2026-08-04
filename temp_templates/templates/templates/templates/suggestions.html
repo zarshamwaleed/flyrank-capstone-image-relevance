@@ -1,0 +1,61 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Suggestions - AI Image Matching{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>💡 AI Suggestions</h2>
+</div>
+
+<div id="suggestions-container">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadSuggestions() {
+    try {
+        const response = await fetch('/api/review/suggestions');
+        const data = await response.json();
+        const container = document.getElementById('suggestions-container');
+        const suggestions = data.suggestions || [];
+        
+        if (suggestions.length === 0) {
+            container.innerHTML = '<div class="text-center py-5"><i class="bi bi-lightbulb" style="font-size: 4rem; color: #ddd;"></i><p class="text-muted mt-3">No suggestions yet</p></div>';
+            return;
+        }
+        
+        let html = '<div class="table-responsive"><table class="table table-hover"><thead><tr>';
+        html += '<th>ID</th><th>Post</th><th>Image</th><th>Similarity</th><th>Guard Status</th><th>Reason</th>';
+        html += '</tr></thead><tbody>';
+        
+        for (let s of suggestions) {
+            let statusColor = 'warning';
+            if (s.guard_passed === 'passed') statusColor = 'success';
+            else if (s.guard_passed === 'rejected') statusColor = 'danger';
+            
+            html += '<tr>';
+            html += '<td>' + s.id + '</td>';
+            html += '<td>' + (s.post_title || 'N/A') + '</td>';
+            html += '<td>' + (s.image_filename || 'N/A') + '</td>';
+            html += '<td>' + (s.similarity_score ? (s.similarity_score * 100).toFixed(1) + '%' : '-') + '</td>';
+            html += '<td><span class="badge bg-' + statusColor + '">' + (s.guard_passed || 'pending') + '</span></td>';
+            html += '<td class="small">' + (s.guard_reason || '-') + '</td>';
+            html += '</tr>';
+        }
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+        
+    } catch (e) {
+        console.error('Error loading suggestions:', e);
+        document.getElementById('suggestions-container').innerHTML = '<div class="alert alert-danger">Error loading suggestions</div>';
+    }
+}
+loadSuggestions();
+</script>
+{% endblock %}

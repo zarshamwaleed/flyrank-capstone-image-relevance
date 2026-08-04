@@ -1,0 +1,116 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Dashboard - AI Image Matching{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📊 Dashboard</h2>
+    <span class="text-muted">{{ now.strftime('%B %d, %Y') if now else '' }}</span>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="total-images">0</div>
+                    <div class="stat-label">Total Images</div>
+                </div>
+                <i class="bi bi-image stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="total-posts">0</div>
+                    <div class="stat-label">Blog Posts</div>
+                </div>
+                <i class="bi bi-file-text stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="total-suggestions">0</div>
+                    <div class="stat-label">Suggestions</div>
+                </div>
+                <i class="bi bi-lightbulb stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-number" id="precision-score">0%</div>
+                    <div class="stat-label">Top-1 Precision</div>
+                </div>
+                <i class="bi bi-graph-up stat-icon"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">📊 Image Processing Status</div>
+            <div class="card-body">
+                <div class="row text-center mb-3">
+                    <div class="col-3"><span class="badge bg-success fs-5 p-2">Completed: <span id="completed-count">0</span></span></div>
+                    <div class="col-3"><span class="badge bg-warning fs-5 p-2">Pending: <span id="pending-count">0</span></span></div>
+                    <div class="col-3"><span class="badge bg-info fs-5 p-2">Processing: <span id="processing-count">0</span></span></div>
+                    <div class="col-3"><span class="badge bg-danger fs-5 p-2">Failed: <span id="failed-count">0</span></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">📈 Recent Activity</div>
+            <div class="card-body" id="recent-activity" style="max-height: 300px; overflow-y: auto;">
+                <p class="text-muted text-center py-3">Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadDashboard() {
+    try {
+        const stats = await fetch('/dashboard/stats').then(r => r.json());
+        document.getElementById('total-images').textContent = stats.total_images || 0;
+        document.getElementById('total-posts').textContent = stats.total_posts || 0;
+        document.getElementById('total-suggestions').textContent = stats.total_suggestions || 0;
+        document.getElementById('precision-score').textContent = stats.top1_precision ? (stats.top1_precision * 100).toFixed(1) + '%' : '0%';
+
+        const statusData = await fetch('/dashboard/status').then(r => r.json());
+        document.getElementById('completed-count').textContent = statusData.completed || 0;
+        document.getElementById('pending-count').textContent = statusData.pending || 0;
+        document.getElementById('processing-count').textContent = statusData.processing || 0;
+        document.getElementById('failed-count').textContent = statusData.failed || 0;
+
+        const activity = await fetch('/dashboard/activity').then(r => r.json());
+        const activityDiv = document.getElementById('recent-activity');
+        if (!activity || activity.length === 0) {
+            activityDiv.innerHTML = '<p class="text-muted text-center py-3">No recent activity</p>';
+        } else {
+            activityDiv.innerHTML = activity.slice(0, 8).map(a => 
+                '<div class="d-flex justify-content-between border-bottom py-2">' +
+                    '<span>' + a.message + '</span>' +
+                    '<span class="text-muted small">' + a.time + '</span>' +
+                '</div>'
+            ).join('');
+        }
+    } catch (e) {
+        console.error('Error:', e);
+        document.getElementById('recent-activity').innerHTML = '<p class="text-danger">Error loading data</p>';
+    }
+}
+document.addEventListener('DOMContentLoaded', loadDashboard);
+</script>
+{% endblock %}

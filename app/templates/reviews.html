@@ -1,0 +1,506 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Reviews - AI Image Matching{% endblock %}
+
+{% block content %}
+<!-- ============================================================
+     PAGE HEADER
+     ============================================================ -->
+<div class="top-bar">
+    <div class="page-title">
+        <h1>✅ <span class="highlight">Reviews</span></h1>
+        <p>Manage AI suggestions and approve or reject image matches</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary filter-btn active" data-filter="pending" onclick="loadReviews('pending')" style="border-radius: 12px; padding: 8px 20px; font-weight: 500;">
+            <i class="bi bi-clock-history"></i> Pending
+        </button>
+        <button class="btn btn-outline-success filter-btn" data-filter="approved" onclick="loadReviews('approved')" style="border-radius: 12px; padding: 8px 20px; font-weight: 500;">
+            <i class="bi bi-check-circle"></i> Approved
+        </button>
+        <button class="btn btn-outline-danger filter-btn" data-filter="rejected" onclick="loadReviews('rejected')" style="border-radius: 12px; padding: 8px 20px; font-weight: 500;">
+            <i class="bi bi-x-circle"></i> Rejected
+        </button>
+        <button class="btn btn-outline-secondary filter-btn" data-filter="all" onclick="loadReviews('all')" style="border-radius: 12px; padding: 8px 20px; font-weight: 500;">
+            <i class="bi bi-list-ul"></i> All
+        </button>
+    </div>
+</div>
+
+<!-- ============================================================
+     STAT CARDS
+     ============================================================ -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-top">
+                <div>
+                    <div class="stat-number" id="rev-total" style="font-size: 34px;">-</div>
+                    <div class="stat-label">Total Suggestions</div>
+                </div>
+                <i class="bi bi-list-check stat-icon" style="color: #6366f1;"></i>
+            </div>
+            <div class="stat-trend neutral" style="margin-top: 12px;">
+                <i class="bi bi-database"></i> All time
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card" style="background: linear-gradient(135deg, #fffbeb, #fef3c7); border-color: #fde68a;">
+            <div class="stat-top">
+                <div>
+                    <div class="stat-number" id="rev-pending" style="font-size: 34px; color: #d97706;">-</div>
+                    <div class="stat-label">Pending Review</div>
+                </div>
+                <i class="bi bi-clock-history stat-icon" style="color: #d97706;"></i>
+            </div>
+            <div class="stat-trend" style="color: #d97706; background: #fef3c7;">
+                <i class="bi bi-hourglass"></i> Awaiting decision
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-color: #a7f3d0;">
+            <div class="stat-top">
+                <div>
+                    <div class="stat-number" id="rev-approved" style="font-size: 34px; color: #059669;">-</div>
+                    <div class="stat-label">Approved</div>
+                </div>
+                <i class="bi bi-check-circle-fill stat-icon" style="color: #059669;"></i>
+            </div>
+            <div class="stat-trend up" style="margin-top: 12px;">
+                <i class="bi bi-check-all"></i> Accepted
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card" style="background: linear-gradient(135deg, #fef2f2, #fecaca); border-color: #fca5a5;">
+            <div class="stat-top">
+                <div>
+                    <div class="stat-number" id="rev-rejected" style="font-size: 34px; color: #dc2626;">-</div>
+                    <div class="stat-label">Rejected</div>
+                </div>
+                <i class="bi bi-x-circle-fill stat-icon" style="color: #dc2626;"></i>
+            </div>
+            <div class="stat-trend down" style="margin-top: 12px;">
+                <i class="bi bi-slash-circle"></i> Declined
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     REVIEWS TABLE
+     ============================================================ -->
+<div id="reviews-container">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status" style="width: 48px; height: 48px;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mt-3" style="font-size: 14px;">Loading suggestions...</p>
+    </div>
+</div>
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+<script>
+let currentFilter = 'pending';
+
+// ============================================================
+// LOAD REVIEWS
+// ============================================================
+async function loadReviews(status) {
+    if (status) {
+        currentFilter = status;
+        // Update active filter button
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.filter === status) {
+                btn.classList.add('active');
+            }
+        });
+    }
+    
+    try {
+        // Load stats
+        const statsResponse = await fetch('/api/review/stats');
+        if (!statsResponse.ok) throw new Error('Failed to fetch stats');
+        const stats = await statsResponse.json();
+        
+        animateNumber('rev-total', stats.total_suggestions || 0);
+        animateNumber('rev-pending', stats.pending || 0);
+        animateNumber('rev-approved', stats.approved || 0);
+        animateNumber('rev-rejected', stats.rejected || 0);
+        
+        // Update sidebar badge
+        document.getElementById('sidebar-pending').textContent = stats.pending || 0;
+        
+        // Load suggestions
+        let url = '/api/review/suggestions';
+        if (currentFilter !== 'all') {
+            url = '/api/review/suggestions?status=' + currentFilter;
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch suggestions');
+        const data = await response.json();
+        const container = document.getElementById('reviews-container');
+        const suggestions = data.suggestions || [];
+        
+        if (!suggestions || suggestions.length === 0) {
+            const filterLabels = {
+                'pending': 'pending',
+                'approved': 'approved',
+                'rejected': 'rejected',
+                'all': ''
+            };
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox" style="font-size: 4rem; color: #e2e8f0;"></i>
+                    <h5 style="color: #64748b; margin-top: 16px; font-weight: 600;">No ${filterLabels[currentFilter]} suggestions</h5>
+                    <p style="color: #94a3b8; font-size: 14px;">${currentFilter === 'pending' ? 'All suggestions have been reviewed!' : 'Try a different filter'}</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = `
+            <div class="card" style="border-radius: 22px; overflow: hidden;">
+                <div class="card-header" style="padding: 18px 28px; background: #ffffff; border-bottom: 1px solid rgba(0,0,0,0.04);">
+                    <i class="bi bi-table" style="color: #6366f1;"></i>
+                    <span style="font-weight: 600; font-size: 15px;">${suggestions.length} suggestions</span>
+                    <span style="margin-left: auto; font-size: 12px; color: #94a3b8; font-weight: 400;">
+                        <i class="bi bi-funnel"></i> Filter: ${currentFilter}
+                    </span>
+                </div>
+                <div class="card-body" style="padding: 0; overflow-x: auto;">
+                    <table class="table table-hover" style="margin: 0; font-size: 14px;">
+                        <thead style="background: #f8fafc; border-bottom: 1px solid #f1f5f9;">
+                            <tr>
+                                <th style="padding: 14px 20px; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; width: 60px;">ID</th>
+                                <th style="padding: 14px 20px; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Post</th>
+                                <th style="padding: 14px 20px; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Image</th>
+                                <th style="padding: 14px 20px; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Similarity</th>
+                                <th style="padding: 14px 20px; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Guard Status</th>
+                                <th style="padding: 14px 20px; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Review</th>
+                                <th style="padding: 14px 20px; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        suggestions.forEach((s, index) => {
+            const delay = index * 30;
+            
+            // Guard status
+            let guardColor = 'warning';
+            let guardLabel = 'Pending';
+            let guardIcon = 'bi-hourglass-split';
+            if (s.guard_passed === 'passed') {
+                guardColor = 'success';
+                guardLabel = 'Passed';
+                guardIcon = 'bi-check-circle-fill';
+            } else if (s.guard_passed === 'rejected') {
+                guardColor = 'danger';
+                guardLabel = 'Rejected';
+                guardIcon = 'bi-x-circle-fill';
+            }
+            
+            // Review status
+            let reviewColor = 'secondary';
+            let reviewLabel = 'Pending';
+            let reviewIcon = 'bi-clock';
+            if (s.review) {
+                if (s.review.decision === 'approved') {
+                    reviewColor = 'success';
+                    reviewLabel = 'Approved';
+                    reviewIcon = 'bi-check-circle-fill';
+                } else {
+                    reviewColor = 'danger';
+                    reviewLabel = 'Rejected';
+                    reviewIcon = 'bi-x-circle-fill';
+                }
+            }
+            
+            // Similarity score badge
+            let simColor = 'secondary';
+            let simLabel = '-';
+            if (s.similarity_score !== null && s.similarity_score !== undefined) {
+                const pct = s.similarity_score * 100;
+                if (pct >= 80) simColor = 'success';
+                else if (pct >= 60) simColor = 'warning';
+                else simColor = 'danger';
+                simLabel = pct.toFixed(1) + '%';
+            }
+            
+            html += `
+                <tr style="animation: fadeInUp 0.3s ease ${delay}ms both; transition: background 0.2s ease;">
+                    <td style="padding: 12px 20px; vertical-align: middle; font-weight: 600; color: #6366f1;">#${s.id}</td>
+                    <td style="padding: 12px 20px; vertical-align: middle; font-weight: 500; color: #0f172a;">${s.post_title || 'N/A'}</td>
+                    <td style="padding: 12px 20px; vertical-align: middle; color: #64748b;">${s.image_filename || 'N/A'}</td>
+                    <td style="padding: 12px 20px; vertical-align: middle;">
+                        <span class="badge bg-${simColor}" style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                            ${simLabel}
+                        </span>
+                    </td>
+                    <td style="padding: 12px 20px; vertical-align: middle;">
+                        <span class="badge bg-${guardColor}" style="padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                            <i class="bi ${guardIcon} me-1"></i>
+                            ${guardLabel}
+                        </span>
+                    </td>
+                    <td style="padding: 12px 20px; vertical-align: middle;">
+                        <span class="badge bg-${reviewColor}" style="padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                            <i class="bi ${reviewIcon} me-1"></i>
+                            ${reviewLabel}
+                        </span>
+                    </td>
+                    <td style="padding: 12px 20px; vertical-align: middle; text-align: center;">
+            `;
+            
+            // Actions - only show for pending suggestions
+            if (!s.review) {
+                html += `
+                    <div style="display: flex; gap: 6px; justify-content: center;">
+                        <button class="btn btn-sm btn-success" onclick="approve(${s.id})" style="border-radius: 8px; padding: 4px 12px; font-weight: 500;" title="Approve">
+                            <i class="bi bi-check-lg"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="reject(${s.id})" style="border-radius: 8px; padding: 4px 12px; font-weight: 500;" title="Reject">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <span style="color: #94a3b8; font-size: 13px; font-weight: 500;">
+                        <i class="bi bi-check-all"></i> Done
+                    </span>
+                `;
+            }
+            
+            html += `
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        container.innerHTML = html;
+        
+    } catch (e) {
+        console.error('Error loading reviews:', e);
+        document.getElementById('reviews-container').innerHTML = `
+            <div class="alert alert-danger" role="alert" style="border-radius: 16px; border: none; padding: 20px;">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Error loading reviews: ${e.message}
+            </div>
+        `;
+    }
+}
+
+// ============================================================
+// APPROVE
+// ============================================================
+async function approve(id) {
+    if (!confirm('✅ Approve this suggestion?\n\nThis will add the image to the blog post.')) return;
+    
+    const btn = document.querySelector(`button[onclick="approve(${id})"]`);
+    if (btn) {
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+        btn.disabled = true;
+    }
+    
+    try {
+        const response = await fetch(`/api/review/suggestions/${id}/approve?reviewer=admin`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast('✅ Suggestion approved successfully!', 'success');
+            loadReviews(currentFilter);
+        } else {
+            showToast('❌ Failed: ' + JSON.stringify(data), 'danger');
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+                btn.disabled = false;
+            }
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'danger');
+        if (btn) {
+            btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+            btn.disabled = false;
+        }
+    }
+}
+
+// ============================================================
+// REJECT
+// ============================================================
+async function reject(id) {
+    if (!confirm('❌ Reject this suggestion?\n\nThis will remove the image from consideration.')) return;
+    
+    const btn = document.querySelector(`button[onclick="reject(${id})"]`);
+    if (btn) {
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+        btn.disabled = true;
+    }
+    
+    try {
+        const response = await fetch(`/api/review/suggestions/${id}/reject?reviewer=admin`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast('❌ Suggestion rejected', 'info');
+            loadReviews(currentFilter);
+        } else {
+            showToast('❌ Failed: ' + JSON.stringify(data), 'danger');
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-x-lg"></i>';
+                btn.disabled = false;
+            }
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'danger');
+        if (btn) {
+            btn.innerHTML = '<i class="bi bi-x-lg"></i>';
+            btn.disabled = false;
+        }
+    }
+}
+
+// ============================================================
+// TOAST NOTIFICATION
+// ============================================================
+function showToast(message, type = 'success') {
+    const colors = {
+        success: 'linear-gradient(135deg, #ecfdf5, #d1fae5)',
+        danger: 'linear-gradient(135deg, #fef2f2, #fecaca)',
+        info: 'linear-gradient(135deg, #eff6ff, #dbeafe)'
+    };
+    
+    const borderColors = {
+        success: '#a7f3d0',
+        danger: '#fca5a5',
+        info: '#bfdbfe'
+    };
+    
+    const iconColors = {
+        success: '#059669',
+        danger: '#dc2626',
+        info: '#0284c7'
+    };
+    
+    const icons = {
+        success: 'bi-check-circle-fill',
+        danger: 'bi-exclamation-triangle-fill',
+        info: 'bi-info-circle-fill'
+    };
+    
+    const alert = document.createElement('div');
+    alert.className = 'alert';
+    alert.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 9999; 
+        border-radius: 16px; padding: 16px 24px; 
+        box-shadow: 0 12px 48px rgba(0,0,0,0.1); 
+        animation: slideIn 0.4s ease;
+        background: ${colors[type]};
+        border: 1px solid ${borderColors[type]};
+        max-width: 400px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    `;
+    alert.innerHTML = `
+        <i class="bi ${icons[type]}" style="font-size: 24px; color: ${iconColors[type]};"></i>
+        <span style="font-size: 14px; font-weight: 500; color: #0f172a;">${message}</span>
+    `;
+    document.body.appendChild(alert);
+    setTimeout(() => { 
+        alert.style.opacity = '0'; 
+        alert.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => alert.remove(), 300); 
+    }, 3000);
+}
+
+// ============================================================
+// ANIMATE NUMBER
+// ============================================================
+function animateNumber(elementId, targetValue) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    
+    const duration = 800;
+    const startTime = performance.now();
+    const startValue = 0;
+    
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const currentValue = Math.round(eased * targetValue);
+        
+        el.textContent = currentValue;
+        
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        } else {
+            el.textContent = targetValue;
+        }
+    }
+    
+    requestAnimationFrame(update);
+}
+
+// ============================================================
+// ANIMATIONS
+// ============================================================
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateX(40px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    .table tbody tr:hover {
+        background: #f8fafc !important;
+    }
+    .table tbody tr {
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .table tbody tr:last-child {
+        border-bottom: none;
+    }
+    .filter-btn.active {
+        background: #6366f1 !important;
+        color: #fff !important;
+        border-color: #6366f1 !important;
+        box-shadow: 0 4px 12px rgba(99,102,241,0.25);
+    }
+    .filter-btn.active:hover {
+        background: #4f46e5 !important;
+        border-color: #4f46e5 !important;
+    }
+    .filter-btn:not(.active):hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    }
+`;
+document.head.appendChild(style);
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    loadReviews('pending');
+});
+</script>
+{% endblock %}

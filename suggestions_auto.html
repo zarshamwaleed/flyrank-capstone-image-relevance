@@ -1,0 +1,291 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Suggestions - AI Image Matching{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+    <div>
+        <h1 style="font-size: 22px; font-weight: 700; margin: 0;">💡 AI Suggestions</h1>
+        <p style="color: #64748b; font-size: 12px; margin: 0;">Auto-saved for review - approve or reject on Reviews page</p>
+    </div>
+    <button class="btn btn-success" onclick="generateAndSaveMatches()" style="border-radius: 10px; padding: 6px 16px; font-weight: 600; font-size: 13px;">
+        <i class="bi bi-arrow-repeat"></i> Generate & Save for Review
+    </button>
+</div>
+
+<!-- STATS -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px;">
+    <div style="background: white; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 20px; font-weight: 700;" id="sug-total-posts">0</div>
+                <div style="font-size: 10px; color: #6c757d;">Posts</div>
+            </div>
+            <i class="bi bi-file-text" style="font-size: 18px; color: #6366f1; opacity: 0.3;"></i>
+        </div>
+    </div>
+    <div style="background: white; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 20px; font-weight: 700; color: #059669;" id="sug-with-matches">0</div>
+                <div style="font-size: 10px; color: #6c757d;">Matched</div>
+            </div>
+            <i class="bi bi-check-circle-fill" style="font-size: 18px; color: #059669; opacity: 0.3;"></i>
+        </div>
+    </div>
+    <div style="background: white; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 20px; font-weight: 700; color: #0284c7;" id="sug-total-matches">0</div>
+                <div style="font-size: 10px; color: #6c757d;">Matches</div>
+            </div>
+            <i class="bi bi-link-45deg" style="font-size: 18px; color: #0284c7; opacity: 0.3;"></i>
+        </div>
+    </div>
+    <div style="background: #fffbeb; padding: 10px 14px; border-radius: 12px; border: 1px solid #fde68a;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size: 20px; font-weight: 700; color: #d97706;" id="sug-avg-similarity">-</div>
+                <div style="font-size: 10px; color: #6c757d;">Avg Sim</div>
+            </div>
+            <i class="bi bi-bar-chart" style="font-size: 18px; color: #d97706; opacity: 0.3;"></i>
+        </div>
+    </div>
+</div>
+
+<div id="suggestions-container">
+    <div class="text-center py-3">
+        <div class="spinner-border text-primary" role="status" style="width: 32px; height: 32px;"></div>
+        <p class="text-muted mt-1" style="font-size: 12px;">Loading suggestions...</p>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// LOAD SUGGESTIONS
+// ============================================================
+async function loadSuggestions() {
+    try {
+        const postsResponse = await fetch('/api/posts/');
+        if (!postsResponse.ok) throw new Error('Failed to fetch posts');
+        const posts = await postsResponse.json();
+        
+        if (!posts || posts.length === 0) {
+            document.getElementById('suggestions-container').innerHTML = '<div class="text-center py-3"><i class="bi bi-lightbulb" style="font-size: 2.5rem; color: #e2e8f0;"></i><h6 style="color: #64748b; margin-top: 8px; font-weight: 600;">No Blog Posts Yet</h6><p style="color: #94a3b8; font-size: 12px;">Create a blog post to get AI image suggestions</p><a href="/dashboard/blogs" class="btn btn-primary btn-sm mt-1" style="border-radius: 8px; padding: 4px 14px; font-size: 12px;"><i class="bi bi-pencil-square"></i> Create Post</a></div>';
+            document.getElementById('sug-total-posts').textContent = 0;
+            document.getElementById('sug-with-matches').textContent = 0;
+            document.getElementById('sug-total-matches').textContent = 0;
+            document.getElementById('sug-avg-similarity').textContent = '-';
+            return;
+        }
+        
+        document.getElementById('sug-total-posts').textContent = posts.length;
+        
+        let html = '';
+        let postsWithMatches = 0;
+        let totalMatches = 0;
+        let totalSimilarity = 0;
+        let similarityCount = 0;
+        
+        for (let post of posts) {
+            try {
+                const matchResponse = await fetch('/api/matching/posts/' + post.id + '/matches?top_k=3');
+                if (!matchResponse.ok) throw new Error('Failed to fetch matches');
+                const matchData = await matchResponse.json();
+                
+                const hasMatches = matchData && matchData.matches && matchData.matches.length > 0;
+                if (hasMatches) {
+                    postsWithMatches++;
+                    totalMatches += matchData.matches.length;
+                    matchData.matches.forEach(function(m) {
+                        if (m.similarity_score !== undefined && m.similarity_score !== null) {
+                            totalSimilarity += m.similarity_score;
+                            similarityCount++;
+                        }
+                    });
+                }
+                
+                html += '<div style="background: white; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 6px; overflow: hidden;">';
+                html += '<div style="padding: 6px 14px; background: #fafbfc; border-bottom: 1px solid rgba(0,0,0,0.04); display: flex; justify-content: space-between; align-items: center;">';
+                html += '<div style="display: flex; align-items: center; gap: 6px;"><i class="bi bi-file-text" style="color: #6366f1; font-size: 13px;"></i><span style="font-weight: 600; font-size: 13px; color: #0f172a;">' + post.title + '</span></div>';
+                
+                // Show if already saved for review
+                const savedStatus = await checkIfSaved(post.id);
+                let statusBadge = '';
+                if (savedStatus) {
+                    statusBadge = '<span style="background: #dbeafe; color: #2563eb; padding: 1px 8px; border-radius: 20px; font-weight: 600; font-size: 9px;"><i class="bi bi-check-circle"></i> Saved</span>';
+                } else {
+                    statusBadge = '<span style="background: #fef3c7; color: #d97706; padding: 1px 8px; border-radius: 20px; font-weight: 600; font-size: 9px;"><i class="bi bi-clock"></i> Pending</span>';
+                }
+                html += statusBadge;
+                html += '</div><div style="padding: 6px 14px;">';
+                
+                if (hasMatches) {
+                    html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">';
+                    
+                    for (let idx = 0; idx < matchData.matches.length; idx++) {
+                        let match = matchData.matches[idx];
+                        let medal = '';
+                        let bg = '#ffffff';
+                        if (idx === 0) { medal = '🥇'; bg = '#fffbeb'; }
+                        else if (idx === 1) { medal = '🥈'; bg = '#f8fafc'; }
+                        else if (idx === 2) { medal = '🥉'; bg = '#fff7ed'; }
+                        
+                        let pct = match.similarity_score ? Math.round(match.similarity_score * 100) : 0;
+                        let color = '#059669';
+                        if (pct < 60) color = '#dc2626';
+                        else if (pct < 80) color = '#d97706';
+                        
+                        html += '<div style="border-radius: 8px; border: 1px solid #f1f5f9; padding: 6px 10px; background: ' + bg + ';">';
+                        html += '<div style="display: flex; align-items: center; gap: 4px; margin-bottom: 1px;">';
+                        html += '<span style="font-size: 14px;">' + medal + '</span>';
+                        html += '<span style="font-weight: 600; font-size: 10px; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + match.filename + '">' + match.filename + '</span>';
+                        html += '</div>';
+                        html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0px; font-size: 9px;">';
+                        html += '<span style="color: #64748b;">Subject:</span><span style="color: #0f172a; font-weight: 500;">' + (match.subject || 'N/A') + '</span>';
+                        html += '<span style="color: #64748b;">Category:</span><span style="color: #0f172a; font-weight: 500;">' + (match.category || 'N/A') + '</span>';
+                        html += '</div>';
+                        html += '<div style="display: flex; align-items: center; gap: 4px; margin-top: 2px;">';
+                        html += '<div style="flex: 1; height: 3px; background: #f1f5f9; border-radius: 10px;"><div style="height: 100%; width: ' + pct + '%; background: ' + color + '; border-radius: 10px;"></div></div>';
+                        html += '<span style="font-size: 9px; font-weight: 600;">' + pct + '%</span>';
+                        html += '</div></div>';
+                    }
+                    
+                    html += '</div>';
+                } else {
+                    html += '<p style="color: #94a3b8; font-size: 11px; margin: 2px 0; text-align: center;">No matches found</p>';
+                }
+                
+                html += '</div></div>';
+                
+            } catch (e) {
+                console.error('Error fetching matches for post:', post.id, e);
+            }
+        }
+        
+        document.getElementById('sug-with-matches').textContent = postsWithMatches;
+        document.getElementById('sug-total-matches').textContent = totalMatches;
+        const avgSimilarity = similarityCount > 0 ? (totalSimilarity / similarityCount) : 0;
+        document.getElementById('sug-avg-similarity').textContent = avgSimilarity > 0 ? (avgSimilarity * 100).toFixed(1) + '%' : '-';
+        
+        if (html === '') {
+            html = '<div class="text-center py-3"><i class="bi bi-lightbulb" style="font-size: 2.5rem; color: #e2e8f0;"></i><h6 style="color: #64748b; margin-top: 8px; font-weight: 600;">No Suggestions Available</h6><p style="color: #94a3b8; font-size: 12px;">Click "Generate & Save" to find AI-powered image suggestions</p><button class="btn btn-success btn-sm mt-1" onclick="generateAndSaveMatches()" style="border-radius: 8px; padding: 4px 14px; font-size: 12px;"><i class="bi bi-arrow-repeat"></i> Generate & Save</button></div>';
+        }
+        
+        document.getElementById('suggestions-container').innerHTML = html;
+        
+    } catch (e) {
+        console.error('Error loading suggestions:', e);
+        document.getElementById('suggestions-container').innerHTML = '<div class="alert alert-danger" style="border-radius: 10px; padding: 8px 14px; font-size: 12px; margin: 0;"><i class="bi bi-exclamation-triangle-fill me-1"></i> Error: ' + e.message + '</div>';
+    }
+}
+
+// ============================================================
+// CHECK IF SUGGESTIONS ARE SAVED
+// ============================================================
+async function checkIfSaved(postId) {
+    try {
+        const response = await fetch('/api/review/suggestions?status=pending');
+        const data = await response.json();
+        const suggestions = data.suggestions || [];
+        return suggestions.some(function(s) { return s.post_id === postId; });
+    } catch (e) {
+        return false;
+    }
+}
+
+// ============================================================
+// GENERATE AND SAVE MATCHES (AUTO-SAVE TO REVIEWS)
+// ============================================================
+async function generateAndSaveMatches() {
+    if (!confirm('🔄 Generate and save matches for all blog posts?\n\nThis will create suggestions for review.')) return;
+    
+    const btn = document.querySelector('.btn-success');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Generating...';
+    btn.disabled = true;
+    
+    document.getElementById('suggestions-container').innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary" style="width: 32px; height: 32px;"></div><h6 style="margin-top: 8px; font-weight: 600; font-size: 14px;">Generating & Saving Matches...</h6><p style="color: #94a3b8; font-size: 12px;">This may take a moment</p></div>';
+    
+    try {
+        const postsResponse = await fetch('/api/posts/');
+        const posts = await postsResponse.json();
+        let totalSaved = 0;
+        
+        for (let post of posts) {
+            try {
+                const matchResponse = await fetch('/api/matching/posts/' + post.id + '/matches?top_k=5');
+                const matchData = await matchResponse.json();
+                
+                if (matchData && matchData.matches && matchData.matches.length > 0) {
+                    // Clear existing suggestions for this post
+                    await fetch('/api/review/suggestions/' + post.id + '/clear', {
+                        method: 'DELETE'
+                    }).catch(function() {});
+                    
+                    // Save each match as a suggestion
+                    for (let match of matchData.matches) {
+                        try {
+                            // Use the approve endpoint to save as pending
+                            const saveResponse = await fetch('/api/guard/suggestions/' + post.id + '/approve', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    image_id: match.image_id,
+                                    similarity_score: match.similarity_score
+                                })
+                            });
+                            if (saveResponse.ok) {
+                                totalSaved++;
+                            }
+                        } catch (e) {
+                            console.log('Error saving:', e);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error processing post:', post.id, e);
+            }
+        }
+        
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        showToast('✅ Generated and saved ' + totalSaved + ' matches for review!', 'success');
+        
+        // Reload suggestions
+        loadSuggestions();
+        
+        // Open reviews page
+        window.open('/dashboard/reviews', '_blank');
+        
+    } catch (e) {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        showToast('Error: ' + e.message, 'danger');
+        loadSuggestions();
+    }
+}
+
+// ============================================================
+// TOAST NOTIFICATION
+// ============================================================
+function showToast(message, type) {
+    type = type || 'success';
+    var colors = {
+        success: 'linear-gradient(135deg, #ecfdf5, #d1fae5)',
+        danger: 'linear-gradient(135deg, #fef2f2, #fecaca)'
+    };
+    var alert = document.createElement('div');
+    alert.style.cssText = 'position: fixed; top: 16px; right: 16px; z-index: 9999; border-radius: 10px; padding: 8px 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); background: ' + (colors[type] || '#ffffff') + '; border: 1px solid ' + (type === 'success' ? '#a7f3d0' : '#fca5a5') + '; max-width: 300px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s ease; font-size: 13px;';
+    alert.innerHTML = '<i class="bi ' + (type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill') + '" style="font-size: 14px; color: ' + (type === 'success' ? '#059669' : '#dc2626') + ';"></i><span style="font-weight: 500;">' + message + '</span>';
+    document.body.appendChild(alert);
+    setTimeout(function() { alert.style.opacity = '0'; alert.style.transition = 'opacity 0.3s'; setTimeout(function() { alert.remove(); }, 300); }, 2500);
+}
+
+var style = document.createElement('style');
+style.textContent = '@keyframes slideIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }';
+document.head.appendChild(style);
+
+document.addEventListener('DOMContentLoaded', loadSuggestions);
+</script>
+{% endblock %}

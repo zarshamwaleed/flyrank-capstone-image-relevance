@@ -1,0 +1,148 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Suggestions - AI Image Matching{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>💡 AI Suggestions</h2>
+    <button class="btn btn-success" onclick="generateMatches()">
+        <i class="bi bi-arrow-repeat"></i> Generate Matches
+    </button>
+</div>
+
+<div id="suggestions-container">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadSuggestions() {
+    try {
+        // Get all blog posts
+        const postsResponse = await fetch('/api/posts/');
+        const posts = await postsResponse.json();
+        
+        if (!posts || posts.length === 0) {
+            document.getElementById('suggestions-container').innerHTML = '<div class="text-center py-5"><i class="bi bi-lightbulb" style="font-size: 4rem; color: #ddd;"></i><p class="text-muted mt-3">No blog posts yet. Create a post to get suggestions!</p></div>';
+            return;
+        }
+        
+        let html = '';
+        
+        // For each post, get matches
+        for (let post of posts) {
+            try {
+                const matchResponse = await fetch('/api/matching/posts/' + post.id + '/matches?top_k=3');
+                const matchData = await matchResponse.json();
+                
+                if (matchData && matchData.matches && matchData.matches.length > 0) {
+                    html += '<div class="card mb-4">';
+                    html += '<div class="card-header">';
+                    html += '<h5 class="mb-0">📝 ' + post.title + '</h5>';
+                    html += '</div>';
+                    html += '<div class="card-body">';
+                    html += '<div class="row">';
+                    
+                    matchData.matches.forEach((match, index) => {
+                        let medal = '';
+                        if (index === 0) medal = '🥇 ';
+                        else if (index === 1) medal = '🥈 ';
+                        else if (index === 2) medal = '🥉 ';
+                        
+                        html += '<div class="col-md-4 mb-3">';
+                        html += '<div class="card ' + (index === 0 ? 'border-success' : '') + '">';
+                        html += '<div class="card-body">';
+                        html += '<h6 class="card-title">' + medal + match.filename + '</h6>';
+                        html += '<p class="small text-muted">Subject: ' + (match.subject || 'N/A') + '</p>';
+                        html += '<p class="small text-muted">Category: ' + (match.category || 'N/A') + '</p>';
+                        html += '<div class="progress">';
+                        let width = Math.round(match.similarity_score * 100);
+                        html += '<div class="progress-bar ' + (index === 0 ? 'bg-success' : 'bg-info') + '" style="width: ' + width + '%">' + width + '%</div>';
+                        html += '</div>';
+                        html += '<p class="small text-muted mt-1">Similarity: ' + (match.similarity_score * 100).toFixed(1) + '%</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    });
+                    
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                } else {
+                    html += '<div class="card mb-4">';
+                    html += '<div class="card-header">';
+                    html += '<h5 class="mb-0">📝 ' + post.title + '</h5>';
+                    html += '</div>';
+                    html += '<div class="card-body">';
+                    html += '<p class="text-muted">No matches found for this post. Upload more images!</p>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+            } catch (e) {
+                console.error('Error fetching matches for post:', post.id, e);
+            }
+        }
+        
+        if (html === '') {
+            html = '<div class="text-center py-5"><i class="bi bi-lightbulb" style="font-size: 4rem; color: #ddd;"></i><p class="text-muted mt-3">No suggestions available</p></div>';
+        }
+        
+        document.getElementById('suggestions-container').innerHTML = html;
+        
+    } catch (e) {
+        console.error('Error loading suggestions:', e);
+        document.getElementById('suggestions-container').innerHTML = '<div class="alert alert-danger">Error loading suggestions: ' + e.message + '</div>';
+    }
+}
+
+async function generateMatches() {
+    if (!confirm('Generate matches for all blog posts? This may take a moment.')) return;
+    
+    document.getElementById('suggestions-container').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Generating...</span></div><p class="mt-3">Generating matches...</p></div>';
+    
+    try {
+        // Get all blog posts
+        const postsResponse = await fetch('/api/posts/');
+        const posts = await postsResponse.json();
+        
+        let count = 0;
+        for (let post of posts) {
+            try {
+                // Get matches
+                const matchResponse = await fetch('/api/matching/posts/' + post.id + '/matches?top_k=5');
+                const matchData = await matchResponse.json();
+                
+                if (matchData && matchData.matches && matchData.matches.length > 0) {
+                    // Save top match as suggestion
+                    const topMatch = matchData.matches[0];
+                    await fetch('/api/guard/suggestions/' + post.id + '/approve', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            image_id: topMatch.image_id,
+                            similarity_score: topMatch.similarity_score
+                        })
+                    });
+                    count++;
+                }
+            } catch (e) {
+                console.error('Error processing post:', post.id, e);
+            }
+        }
+        
+        alert('✅ Generated matches for ' + count + ' posts!');
+        loadSuggestions();
+        
+    } catch (e) {
+        alert('Error: ' + e.message);
+        loadSuggestions();
+    }
+}
+
+// Load suggestions when page loads
+document.addEventListener('DOMContentLoaded', loadSuggestions);
+</script>
+{% endblock %}
