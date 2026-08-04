@@ -36,7 +36,7 @@ async def create_blog_post(
     except Exception as e:
         print(f'⚠️ Warning: Failed to generate embedding: {e}')
     
-    # AUTO-SAVE SUGGESTIONS WITH AUTO-REJECT FOR LOW SCORES
+    # AUTO-SAVE SUGGESTIONS WITH PROPER GUARD LOGIC
     try:
         matches, total = matching_service.find_matches(db_post.id, db, 5, 0)
         if matches:
@@ -44,13 +44,19 @@ async def create_blog_post(
             for i, match in enumerate(matches, 1):
                 similarity = match['similarity_score']
                 
-                # AUTO-REJECT if similarity is below 25%
-                if similarity < 0.25:
-                    guard_passed = 'rejected'
-                    guard_reason = f'Auto-rejected: Similarity {similarity:.1%} below 25% threshold'
-                else:
+                # GUARD LOGIC:
+                # - Above 50%: AUTO-APPROVE (Passed)
+                # - Between 30-50%: PENDING (Needs human review)
+                # - Below 30%: AUTO-REJECT (Rejected)
+                if similarity >= 0.5:
+                    guard_passed = 'passed'
+                    guard_reason = f'Auto-approved: Similarity {similarity:.1%} above 50% threshold'
+                elif similarity >= 0.3:
                     guard_passed = 'pending'
-                    guard_reason = None
+                    guard_reason = f'Pending review: Similarity {similarity:.1%} between 30-50%'
+                else:
+                    guard_passed = 'rejected'
+                    guard_reason = f'Auto-rejected: Similarity {similarity:.1%} below 30% threshold'
                 
                 suggestion = Suggestion(
                     post_id=db_post.id,
